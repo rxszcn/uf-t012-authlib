@@ -437,9 +437,18 @@ class AuthorizationServer(Hookable):
                 return self.handle_error_response(request.request, error)
 
         # Otherwise, validate and respond (existing behavior)
+        #
+        # Convert the framework request once, before the iteration. An
+        # endpoint can ask for the next endpoint with ContinueIteration, and
+        # several endpoints can then handle the same request. Wrapping it
+        # again on every iteration re-wraps an OAuth2Request, which framework
+        # integrations such as Django cannot construct from. It also made the
+        # behavior depend on whether the integration ignores its argument,
+        # like the Flask one does.
         for endpoint in endpoints:
             try:
-                request = endpoint.create_endpoint_request(request)
+                if not isinstance(request, (OAuth2Request, JsonRequest)):
+                    request = endpoint.create_endpoint_request(request)
                 result = endpoint(request)
                 if result is None:
                     return None
